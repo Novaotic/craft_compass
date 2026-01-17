@@ -106,7 +106,7 @@ class ItemForm:
         photo_frame = ttk.Frame(main_frame)
         photo_frame.grid(row=5, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         self.photo_path_var = tk.StringVar()
-        self.photo_path_var.trace('w', self._update_image_preview)
+        self.photo_path_var.trace_add('write', self._update_image_preview)
         photo_entry = ttk.Entry(photo_frame, textvariable=self.photo_path_var, width=30)
         photo_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Button(photo_frame, text="Browse", command=self._browse_photo).pack(side=tk.LEFT, padx=5)

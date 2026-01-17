@@ -33,7 +33,7 @@ class SearchFilterWidget(ttk.Frame):
         
         ttk.Label(search_frame, text="Search:").pack(side=tk.LEFT, padx=5)
         self.search_var = tk.StringVar()
-        self.search_var.trace('w', self._on_search_change)
+        self.search_var.trace_add('write', self._on_search_change)
         search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=30)
         search_entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
@@ -57,7 +57,7 @@ class SearchFilterWidget(ttk.Frame):
                 ttk.Label(frame, text=f"{filter_name}:").pack(side=tk.LEFT, padx=2)
                 var = tk.StringVar()
                 var.set("All")
-                var.trace('w', self._on_filter_change)
+                var.trace_add('write', self._on_filter_change)
                 self.filter_vars[filter_name] = var
                 
                 combo = ttk.Combobox(frame, textvariable=var, width=15, state="readonly")

@@ -18,6 +18,53 @@ from ui.import_dialog import ImportDialog
 from utils.helpers import format_date_display, format_quantity
 
 
+def format_tags_display(tags):
+    """
+    Format tags for display with color indicators.
+    
+    Args:
+        tags: List of Tag objects
+    
+    Returns:
+        Formatted string with tag names
+    """
+    if not tags:
+        return ""
+    
+    # Just return tag names - colors will be applied via tkinter tags
+    return ", ".join([tag.name for tag in tags])
+
+
+def get_tag_color_for_styling(tags):
+    """
+    Get the primary tag color for row styling.
+    
+    Args:
+        tags: List of Tag objects
+    
+    Returns:
+        Tuple of (tkinter_tag_name, color_name) or (None, None)
+    """
+    if not tags:
+        return None, None
+    
+    # Use the first tag's color for row styling
+    first_tag = tags[0]
+    tag_color = getattr(first_tag, 'color', None) if hasattr(first_tag, 'color') else None
+    
+    if tag_color and str(tag_color).strip():
+        color_lower = str(tag_color).strip().lower()
+        # Check if it's a named color we support
+        supported_colors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'gray', 'grey']
+        if color_lower in supported_colors:
+            return f"tag_{color_lower}", color_lower
+        # Check if it's a hex color
+        elif color_lower.startswith('#'):
+            return "tag_hex", color_lower
+    
+    return None, None
+
+
 class MainWindow:
     def __init__(self, db: CraftCompassDB):
         """
@@ -133,7 +180,7 @@ class MainWindow:
         scrollbar = ttk.Scrollbar(list_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.items_tree = ttk.Treeview(list_frame, columns=("Category", "Quantity", "Unit", "Supplier", "Date"), 
+        self.items_tree = ttk.Treeview(list_frame, columns=("Category", "Quantity", "Unit", "Supplier", "Date", "Tags"), 
                                        show="headings", yscrollcommand=scrollbar.set)
         self.items_tree.heading("#0", text="ID")
         self.items_tree.heading("Category", text="Category")
@@ -141,16 +188,21 @@ class MainWindow:
         self.items_tree.heading("Unit", text="Unit")
         self.items_tree.heading("Supplier", text="Supplier")
         self.items_tree.heading("Date", text="Purchase Date")
+        self.items_tree.heading("Tags", text="Tags")
         
         self.items_tree.column("#0", width=50)
-        self.items_tree.column("Category", width=150)
-        self.items_tree.column("Quantity", width=100)
-        self.items_tree.column("Unit", width=100)
-        self.items_tree.column("Supplier", width=150)
-        self.items_tree.column("Date", width=120)
+        self.items_tree.column("Category", width=120)
+        self.items_tree.column("Quantity", width=80)
+        self.items_tree.column("Unit", width=80)
+        self.items_tree.column("Supplier", width=120)
+        self.items_tree.column("Date", width=100)
+        self.items_tree.column("Tags", width=150)
         
         self.items_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.items_tree.yview)
+        
+        # Configure tag colors for row styling (tkinter tags, not our tags)
+        self._configure_tag_colors()
     
     def _create_projects_tab(self):
         """Create the projects tab."""
@@ -178,20 +230,25 @@ class MainWindow:
         scrollbar = ttk.Scrollbar(list_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.projects_tree = ttk.Treeview(list_frame, columns=("Description", "Date Created", "Materials"), 
+        self.projects_tree = ttk.Treeview(list_frame, columns=("Description", "Date Created", "Materials", "Tags"), 
                                           show="headings", yscrollcommand=scrollbar.set)
         self.projects_tree.heading("#0", text="ID")
         self.projects_tree.heading("Description", text="Description")
         self.projects_tree.heading("Date Created", text="Date Created")
         self.projects_tree.heading("Materials", text="Materials Count")
+        self.projects_tree.heading("Tags", text="Tags")
         
         self.projects_tree.column("#0", width=50)
-        self.projects_tree.column("Description", width=300)
+        self.projects_tree.column("Description", width=250)
         self.projects_tree.column("Date Created", width=120)
-        self.projects_tree.column("Materials", width=120)
+        self.projects_tree.column("Materials", width=100)
+        self.projects_tree.column("Tags", width=150)
         
         self.projects_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.projects_tree.yview)
+        
+        # Configure tag colors for projects tree
+        self._configure_tag_colors()
     
     def _create_suppliers_tab(self):
         """Create the suppliers tab."""
@@ -208,7 +265,7 @@ class MainWindow:
         search_frame.pack(fill=tk.X, padx=5, pady=5)
         ttk.Label(search_frame, text="Search:").pack(side=tk.LEFT, padx=5)
         self.suppliers_search_var = tk.StringVar()
-        self.suppliers_search_var.trace('w', self._on_suppliers_search)
+        self.suppliers_search_var.trace_add('write', self._on_suppliers_search)
         ttk.Entry(search_frame, textvariable=self.suppliers_search_var, width=40).pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         ttk.Button(search_frame, text="Clear", command=lambda: self.suppliers_search_var.set("")).pack(side=tk.LEFT, padx=5)
         
@@ -234,6 +291,34 @@ class MainWindow:
         
         self.suppliers_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.suppliers_tree.yview)
+    
+    def _configure_tag_colors(self):
+        """Configure tkinter tag colors for row styling based on tag colors."""
+        # Color mapping for common color names to tkinter colors
+        color_map = {
+            'red': '#ffcccc',
+            'blue': '#ccccff',
+            'green': '#ccffcc',
+            'yellow': '#ffffcc',
+            'orange': '#ffe6cc',
+            'purple': '#e6ccff',
+            'pink': '#ffccff',
+            'gray': '#e0e0e0',
+            'grey': '#e0e0e0',
+        }
+        
+        # Configure tkinter tags for each color
+        for color_name, bg_color in color_map.items():
+            if hasattr(self, 'items_tree'):
+                self.items_tree.tag_configure(f"tag_{color_name}", background=bg_color)
+            if hasattr(self, 'projects_tree'):
+                self.projects_tree.tag_configure(f"tag_{color_name}", background=bg_color)
+        
+        # Default tag for hex colors
+        if hasattr(self, 'items_tree'):
+            self.items_tree.tag_configure("tag_hex", background='#f0f0f0')
+        if hasattr(self, 'projects_tree'):
+            self.projects_tree.tag_configure("tag_hex", background='#f0f0f0')
     
     def _create_reports_tab(self):
         """Create the reports tab."""
@@ -278,12 +363,22 @@ class MainWindow:
             supplier_name = supplier_dict.get(item.supplier_id, "") if item.supplier_id else ""
             date_str = format_date_display(item.purchase_date) if item.purchase_date else ""
             
-            self.items_tree.insert("", tk.END, text=str(item.id), 
+            # Get tags for this item
+            item_tags = self.tag_controller.get_item_tags(item.id)
+            tag_names = format_tags_display(item_tags)
+            
+            # Get color tag for row styling
+            tk_tag, _ = get_tag_color_for_styling(item_tags)
+            tags_list = [tk_tag] if tk_tag else []
+            
+            item_id = self.items_tree.insert("", tk.END, text=str(item.id), 
                                   values=(item.category or "", 
                                          str(item.quantity) if item.quantity else "",
                                          item.unit or "",
                                          supplier_name,
-                                         date_str))
+                                         date_str,
+                                         tag_names),
+                                  tags=tags_list)
     
     def _on_projects_search(self, search_term: str):
         """Handle projects search."""
@@ -314,10 +409,20 @@ class MainWindow:
             date_str = format_date_display(project.date_created) if project.date_created else ""
             materials_count = len(project.materials_used)
             
+            # Get tags for this project
+            project_tags = self.tag_controller.get_project_tags(project.id)
+            tag_names = format_tags_display(project_tags)
+            
+            # Get color tag for row styling
+            tk_tag, _ = get_tag_color_for_styling(project_tags)
+            tags_list = [tk_tag] if tk_tag else []
+            
             self.projects_tree.insert("", tk.END, text=str(project.id),
                                      values=(project.description or "",
                                             date_str,
-                                            str(materials_count)))
+                                            str(materials_count),
+                                            tag_names),
+                                     tags=tags_list)
     
     def _on_suppliers_search(self, *args):
         """Handle suppliers search."""
@@ -429,7 +534,7 @@ class MainWindow:
     
     def _new_project(self):
         """Open form to create a new project."""
-        items = self.db.items.get_all_items()
+        items = self.item_controller.get_all_items()
         items_list = [{'id': item.id, 'name': item.name} for item in items]
         form = ProjectForm(self.root, self.db, items_list, on_save=self._save_project)
         self.root.wait_window(form.dialog)
@@ -449,7 +554,7 @@ class MainWindow:
             messagebox.showerror("Error", "Project not found")
             return
         
-        items = self.db.items.get_all_items()
+        items = self.item_controller.get_all_items()
         items_list = [{'id': item.id, 'name': item.name} for item in items]
         project_dict = project.to_dict()
         form = ProjectForm(self.root, self.db, items_list, on_save=self._update_project, project_data=project_dict)
