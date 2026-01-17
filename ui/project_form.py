@@ -32,19 +32,22 @@ class ProjectForm:
         self.dialog.transient(parent)
         self.dialog.grab_set()
         
-        # Center the dialog
-        self.dialog.geometry("600x500")
-        self._center_window()
+        # Set minimum size and initial geometry
+        self.dialog.minsize(650, 550)
+        self.dialog.geometry("650x550")
         
         self._create_widgets()
         if project_data:
             self._load_project_data()
+        
+        # Center the dialog after widgets are created
+        self._center_window()
     
     def _center_window(self):
         """Center the dialog window on the parent."""
         self.dialog.update_idletasks()
-        width = self.dialog.winfo_width()
-        height = self.dialog.winfo_height()
+        width = self.dialog.winfo_reqwidth()
+        height = self.dialog.winfo_reqheight()
         x = (self.dialog.winfo_screenwidth() // 2) - (width // 2)
         y = (self.dialog.winfo_screenheight() // 2) - (height // 2)
         self.dialog.geometry(f'{width}x{height}+{x}+{y}')
@@ -54,28 +57,34 @@ class ProjectForm:
         main_frame = ttk.Frame(self.dialog, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
+        # Configure grid weights for proper resizing
+        main_frame.grid_columnconfigure(1, weight=1)
+        main_frame.grid_rowconfigure(3, weight=1)
+        
         # Name field
-        ttk.Label(main_frame, text="Name *:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Name *:").grid(row=0, column=0, sticky=tk.W, pady=5, padx=5)
         self.name_var = tk.StringVar()
-        ttk.Entry(main_frame, textvariable=self.name_var, width=50).grid(row=0, column=1, pady=5, sticky=tk.W)
+        name_entry = ttk.Entry(main_frame, textvariable=self.name_var, width=45)
+        name_entry.grid(row=0, column=1, pady=5, sticky=tk.W+tk.E, padx=5)
         
         # Description field
-        ttk.Label(main_frame, text="Description:").grid(row=1, column=0, sticky=tk.W+tk.N, pady=5)
-        self.description_text = tk.Text(main_frame, width=50, height=4)
-        self.description_text.grid(row=1, column=1, pady=5, sticky=tk.W)
+        ttk.Label(main_frame, text="Description:").grid(row=1, column=0, sticky=tk.W+tk.N, pady=5, padx=5)
+        self.description_text = tk.Text(main_frame, width=45, height=4, wrap=tk.WORD)
+        self.description_text.grid(row=1, column=1, pady=5, sticky=tk.W+tk.E, padx=5)
         
         # Date created field
-        ttk.Label(main_frame, text="Date Created:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Date Created:").grid(row=2, column=0, sticky=tk.W, pady=5, padx=5)
         date_frame = ttk.Frame(main_frame)
-        date_frame.grid(row=2, column=1, pady=5, sticky=tk.W)
+        date_frame.grid(row=2, column=1, pady=5, sticky=tk.W, padx=5)
         self.date_created_var = tk.StringVar()
         ttk.Entry(date_frame, textvariable=self.date_created_var, width=20).pack(side=tk.LEFT)
         ttk.Button(date_frame, text="Today", command=self._set_today_date).pack(side=tk.LEFT, padx=5)
         
         # Materials section
-        ttk.Label(main_frame, text="Materials:").grid(row=3, column=0, sticky=tk.W+tk.N, pady=5)
+        ttk.Label(main_frame, text="Materials:").grid(row=3, column=0, sticky=tk.W+tk.N, pady=5, padx=5)
         materials_frame = ttk.Frame(main_frame)
-        materials_frame.grid(row=3, column=1, pady=5, sticky=tk.W+tk.E+tk.N+tk.S)
+        materials_frame.grid(row=3, column=1, pady=5, sticky=tk.W+tk.E+tk.N+tk.S, padx=5)
+        materials_frame.grid_columnconfigure(0, weight=1)
         
         # Materials listbox with scrollbar
         listbox_frame = ttk.Frame(materials_frame)
@@ -94,7 +103,7 @@ class ProjectForm:
         
         ttk.Label(material_controls, text="Item:").pack(side=tk.LEFT, padx=5)
         self.item_var = tk.StringVar()
-        item_combo = ttk.Combobox(material_controls, textvariable=self.item_var, width=30, state="readonly")
+        item_combo = ttk.Combobox(material_controls, textvariable=self.item_var, width=25, state="readonly")
         item_combo['values'] = [f"{i['id']}: {i['name']}" for i in self.items_list]
         item_combo.pack(side=tk.LEFT, padx=5)
         self.item_combo = item_combo
@@ -111,8 +120,6 @@ class ProjectForm:
         button_frame.grid(row=4, column=0, columnspan=2, pady=20)
         ttk.Button(button_frame, text="Save", command=self._save_project).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=self._cancel).pack(side=tk.LEFT, padx=5)
-        
-        main_frame.grid_rowconfigure(3, weight=1)
     
     def _set_today_date(self):
         """Set date created to today."""

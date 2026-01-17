@@ -31,19 +31,22 @@ class ItemForm:
         self.dialog.transient(parent)
         self.dialog.grab_set()
         
-        # Center the dialog
-        self.dialog.geometry("500x400")
-        self._center_window()
+        # Set minimum size and initial geometry
+        self.dialog.minsize(520, 420)
+        self.dialog.geometry("520x420")
         
         self._create_widgets()
         if item_data:
             self._load_item_data()
+        
+        # Center the dialog after widgets are created
+        self._center_window()
     
     def _center_window(self):
         """Center the dialog window on the parent."""
         self.dialog.update_idletasks()
-        width = self.dialog.winfo_width()
-        height = self.dialog.winfo_height()
+        width = self.dialog.winfo_reqwidth()
+        height = self.dialog.winfo_reqheight()
         x = (self.dialog.winfo_screenwidth() // 2) - (width // 2)
         y = (self.dialog.winfo_screenheight() // 2) - (height // 2)
         self.dialog.geometry(f'{width}x{height}+{x}+{y}')
@@ -53,20 +56,23 @@ class ItemForm:
         main_frame = ttk.Frame(self.dialog, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
+        # Configure grid weights for proper resizing
+        main_frame.grid_columnconfigure(1, weight=1)
+        
         # Name field
-        ttk.Label(main_frame, text="Name *:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Name *:").grid(row=0, column=0, sticky=tk.W, pady=5, padx=5)
         self.name_var = tk.StringVar()
-        ttk.Entry(main_frame, textvariable=self.name_var, width=40).grid(row=0, column=1, pady=5, sticky=tk.W)
+        ttk.Entry(main_frame, textvariable=self.name_var, width=40).grid(row=0, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         
         # Category field
-        ttk.Label(main_frame, text="Category:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Category:").grid(row=1, column=0, sticky=tk.W, pady=5, padx=5)
         self.category_var = tk.StringVar()
-        ttk.Entry(main_frame, textvariable=self.category_var, width=40).grid(row=1, column=1, pady=5, sticky=tk.W)
+        ttk.Entry(main_frame, textvariable=self.category_var, width=40).grid(row=1, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         
         # Quantity field
-        ttk.Label(main_frame, text="Quantity:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Quantity:").grid(row=2, column=0, sticky=tk.W, pady=5, padx=5)
         quantity_frame = ttk.Frame(main_frame)
-        quantity_frame.grid(row=2, column=1, pady=5, sticky=tk.W)
+        quantity_frame.grid(row=2, column=1, pady=5, padx=5, sticky=tk.W)
         self.quantity_var = tk.StringVar()
         ttk.Entry(quantity_frame, textvariable=self.quantity_var, width=20).pack(side=tk.LEFT)
         self.unit_var = tk.StringVar()
@@ -74,27 +80,28 @@ class ItemForm:
         unit_entry.pack(side=tk.LEFT, padx=5)
         
         # Supplier field
-        ttk.Label(main_frame, text="Supplier:").grid(row=3, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Supplier:").grid(row=3, column=0, sticky=tk.W, pady=5, padx=5)
         self.supplier_var = tk.StringVar()
         supplier_combo = ttk.Combobox(main_frame, textvariable=self.supplier_var, width=37, state="readonly")
         supplier_combo['values'] = [""] + [f"{s['id']}: {s['name']}" for s in self.suppliers_list]
-        supplier_combo.grid(row=3, column=1, pady=5, sticky=tk.W)
+        supplier_combo.grid(row=3, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         self.supplier_combo = supplier_combo
         
         # Purchase date field
-        ttk.Label(main_frame, text="Purchase Date:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Purchase Date:").grid(row=4, column=0, sticky=tk.W, pady=5, padx=5)
         date_frame = ttk.Frame(main_frame)
-        date_frame.grid(row=4, column=1, pady=5, sticky=tk.W)
+        date_frame.grid(row=4, column=1, pady=5, padx=5, sticky=tk.W)
         self.purchase_date_var = tk.StringVar()
         ttk.Entry(date_frame, textvariable=self.purchase_date_var, width=20).pack(side=tk.LEFT)
         ttk.Button(date_frame, text="Today", command=self._set_today_date).pack(side=tk.LEFT, padx=5)
         
         # Photo path field
-        ttk.Label(main_frame, text="Photo Path:").grid(row=5, column=0, sticky=tk.W, pady=5)
+        ttk.Label(main_frame, text="Photo Path:").grid(row=5, column=0, sticky=tk.W, pady=5, padx=5)
         photo_frame = ttk.Frame(main_frame)
-        photo_frame.grid(row=5, column=1, pady=5, sticky=tk.W)
+        photo_frame.grid(row=5, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         self.photo_path_var = tk.StringVar()
-        ttk.Entry(photo_frame, textvariable=self.photo_path_var, width=30).pack(side=tk.LEFT)
+        photo_entry = ttk.Entry(photo_frame, textvariable=self.photo_path_var, width=30)
+        photo_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Button(photo_frame, text="Browse", command=self._browse_photo).pack(side=tk.LEFT, padx=5)
         
         # Buttons

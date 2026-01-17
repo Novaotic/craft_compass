@@ -391,26 +391,28 @@ class MainWindow:
         dialog.title("New Supplier")
         dialog.transient(self.root)
         dialog.grab_set()
-        dialog.geometry("400x200")
+        dialog.minsize(500, 280)
+        dialog.geometry("500x280")
         
         frame = ttk.Frame(dialog, padding="10")
         frame.pack(fill=tk.BOTH, expand=True)
+        frame.grid_columnconfigure(1, weight=1)
         
-        ttk.Label(frame, text="Name *:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(frame, text="Name *:").grid(row=0, column=0, sticky=tk.W, pady=5, padx=5)
         name_var = tk.StringVar()
-        ttk.Entry(frame, textvariable=name_var, width=40).grid(row=0, column=1, pady=5)
+        ttk.Entry(frame, textvariable=name_var, width=40).grid(row=0, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         
-        ttk.Label(frame, text="Contact Info *:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(frame, text="Contact Info *:").grid(row=1, column=0, sticky=tk.W, pady=5, padx=5)
         contact_var = tk.StringVar()
-        ttk.Entry(frame, textvariable=contact_var, width=40).grid(row=1, column=1, pady=5)
+        ttk.Entry(frame, textvariable=contact_var, width=40).grid(row=1, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         
-        ttk.Label(frame, text="Website:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        ttk.Label(frame, text="Website:").grid(row=2, column=0, sticky=tk.W, pady=5, padx=5)
         website_var = tk.StringVar()
-        ttk.Entry(frame, textvariable=website_var, width=40).grid(row=2, column=1, pady=5)
+        ttk.Entry(frame, textvariable=website_var, width=40).grid(row=2, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         
-        ttk.Label(frame, text="Notes:").grid(row=3, column=0, sticky=tk.W, pady=5)
-        notes_text = tk.Text(frame, width=40, height=3)
-        notes_text.grid(row=3, column=1, pady=5)
+        ttk.Label(frame, text="Notes:").grid(row=3, column=0, sticky=tk.W+tk.N, pady=5, padx=5)
+        notes_text = tk.Text(frame, width=40, height=4, wrap=tk.WORD)
+        notes_text.grid(row=3, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         
         def save():
             if not name_var.get().strip() or not contact_var.get().strip():
@@ -429,8 +431,18 @@ class MainWindow:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to create supplier: {str(e)}")
         
-        ttk.Button(frame, text="Save", command=save).grid(row=4, column=0, columnspan=2, pady=10)
-        ttk.Button(frame, text="Cancel", command=dialog.destroy).grid(row=4, column=1, pady=10, sticky=tk.E)
+        button_frame = ttk.Frame(frame)
+        button_frame.grid(row=4, column=0, columnspan=2, pady=15)
+        ttk.Button(button_frame, text="Save", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        
+        # Center the dialog
+        dialog.update_idletasks()
+        width = dialog.winfo_reqwidth()
+        height = dialog.winfo_reqheight()
+        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (height // 2)
+        dialog.geometry(f'{width}x{height}+{x}+{y}')
     
     def _edit_supplier(self):
         """Edit selected supplier (simplified - can be enhanced later)."""
