@@ -104,4 +104,44 @@ class ItemController:
             item_id: ID of item to delete
         """
         self.db.items.delete_item(item_id)
+    
+    def search_items(self, search_term: str) -> List[Item]:
+        """
+        Search items by name, category, or supplier name.
+        
+        Args:
+            search_term: Search term to match against
+        
+        Returns:
+            List of Item objects matching the search
+        """
+        items_data = self.db.items.search_items(search_term)
+        return [Item.from_dict(item) for item in items_data]
+    
+    def filter_items(self, category: Optional[str] = None, supplier_id: Optional[int] = None,
+                     date_from: Optional[str] = None, date_to: Optional[str] = None,
+                     quantity_min: Optional[float] = None, quantity_max: Optional[float] = None) -> List[Item]:
+        """
+        Filter items by various criteria.
+        
+        Args:
+            category: Filter by category
+            supplier_id: Filter by supplier ID
+            date_from: Filter by purchase date from (YYYY-MM-DD)
+            date_to: Filter by purchase date to (YYYY-MM-DD)
+            quantity_min: Minimum quantity
+            quantity_max: Maximum quantity
+        
+        Returns:
+            List of Item objects matching the filters
+        """
+        items_data = self.db.items.filter_items(
+            category=category,
+            supplier_id=supplier_id,
+            date_from=date_from,
+            date_to=date_to,
+            quantity_min=quantity_min,
+            quantity_max=quantity_max
+        )
+        return [Item.from_dict(item) for item in items_data]
 

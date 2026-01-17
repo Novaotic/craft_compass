@@ -3,7 +3,8 @@ from database.db_manager import (
     SupplierManager,
     ItemManager,
     ProjectManager,
-    ProjectMaterialManager
+    ProjectMaterialManager,
+    TagManager
 )
 
 class CraftCompassDB:
@@ -20,6 +21,7 @@ class CraftCompassDB:
         self.items = ItemManager(db_path)
         self.projects = ProjectManager(db_path)
         self.materials = ProjectMaterialManager(db_path)
+        self.tags = TagManager(db_path)
 
     def initialize(self):
         """Initialize the database with the schema."""

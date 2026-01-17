@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox
 from typing import Optional, Callable, List, Dict, Any
 from utils.validators import validate_required, validate_date
 from utils.helpers import get_today_date
+from controllers.tag_controller import TagController
 
 
 class ProjectForm:
@@ -25,6 +26,8 @@ class ProjectForm:
         self.project_data = project_data
         self.result = None
         self.selected_materials = []  # List of (item_id, quantity_used) tuples
+        self.tag_controller = TagController(db)
+        self.project_id = project_data.get('id') if project_data else None
         
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
@@ -33,8 +36,8 @@ class ProjectForm:
         self.dialog.grab_set()
         
         # Set minimum size and initial geometry
-        self.dialog.minsize(650, 550)
-        self.dialog.geometry("650x550")
+        self.dialog.minsize(650, 600)
+        self.dialog.geometry("650x600")
         
         self._create_widgets()
         if project_data:
@@ -115,9 +118,28 @@ class ProjectForm:
         ttk.Button(material_controls, text="Add", command=self._add_material).pack(side=tk.LEFT, padx=5)
         ttk.Button(material_controls, text="Remove", command=self._remove_material).pack(side=tk.LEFT, padx=5)
         
+        # Tags field
+        ttk.Label(main_frame, text="Tags:").grid(row=4, column=0, sticky=tk.W+tk.N, pady=5, padx=5)
+        tags_frame = ttk.Frame(main_frame)
+        tags_frame.grid(row=4, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
+        
+        # Tags listbox with scrollbar
+        tags_list_frame = ttk.Frame(tags_frame)
+        tags_list_frame.pack(fill=tk.BOTH, expand=True)
+        
+        tags_scrollbar = ttk.Scrollbar(tags_list_frame)
+        tags_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.tags_listbox = tk.Listbox(tags_list_frame, height=4, selectmode=tk.MULTIPLE, yscrollcommand=tags_scrollbar.set)
+        self.tags_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tags_scrollbar.config(command=self.tags_listbox.yview)
+        
+        # Load tags into listbox
+        self._load_tags_list()
+        
         # Buttons
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=4, column=0, columnspan=2, pady=20)
+        button_frame.grid(row=5, column=0, columnspan=2, pady=20)
         ttk.Button(button_frame, text="Save", command=self._save_project).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=self._cancel).pack(side=tk.LEFT, padx=5)
     
@@ -178,6 +200,12 @@ class ProjectForm:
         self.materials_listbox.delete(index)
         del self.selected_materials[index]
     
+    def _load_tags_list(self):
+        """Load available tags into the listbox."""
+        tags = self.tag_controller.get_all_tags()
+        for tag in tags:
+            self.tags_listbox.insert(tk.END, f"{tag.name}")
+    
     def _load_project_data(self):
         """Load project data into form fields."""
         if not self.project_data:
@@ -194,6 +222,14 @@ class ProjectForm:
             self.selected_materials.append((item_id, quantity))
             item_name = next((i['name'] for i in self.items_list if i['id'] == item_id), f"Item {item_id}")
             self.materials_listbox.insert(tk.END, f"{item_name} - {quantity}")
+        
+        # Load tags
+        if self.project_id:
+            project_tags = self.tag_controller.get_project_tags(self.project_id)
+            tag_names = [tag.name for tag in project_tags]
+            for i, tag_name in enumerate(self.tags_listbox.get(0, tk.END)):
+                if tag_name in tag_names:
+                    self.tags_listbox.selection_set(i)
     
     def _save_project(self):
         """Validate and save the project."""
@@ -211,12 +247,18 @@ class ProjectForm:
                 messagebox.showerror("Validation Error", error)
                 return
         
+        # Get selected tags
+        selected_indices = self.tags_listbox.curselection()
+        all_tags = self.tag_controller.get_all_tags()
+        selected_tag_ids = [all_tags[i].id for i in selected_indices]
+        
         # Collect form data
         project_data = {
             'name': self.name_var.get().strip(),
             'description': self.description_text.get('1.0', tk.END).strip() or None,
             'date_created': date_str or None,
-            'materials_used': self.selected_materials.copy()
+            'materials_used': self.selected_materials.copy(),
+            'tag_ids': selected_tag_ids
         }
         
         self.result = project_data

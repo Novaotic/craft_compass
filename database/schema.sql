@@ -37,3 +37,38 @@ CREATE TABLE IF NOT EXISTS project_materials (
     FOREIGN KEY (project_id) REFERENCES projects(id),
     FOREIGN KEY (item_id) REFERENCES items(id)
 );
+
+-- Table: tags
+CREATE TABLE IF NOT EXISTS tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    color TEXT
+);
+
+-- Table: item_tags (many-to-many relationship)
+CREATE TABLE IF NOT EXISTS item_tags (
+    item_id INTEGER,
+    tag_id INTEGER,
+    PRIMARY KEY (item_id, tag_id),
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
+-- Table: project_tags (many-to-many relationship)
+CREATE TABLE IF NOT EXISTS project_tags (
+    project_id INTEGER,
+    tag_id INTEGER,
+    PRIMARY KEY (project_id, tag_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+
+-- Table: item_metadata (key-value store for custom metadata)
+CREATE TABLE IF NOT EXISTS item_metadata (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id INTEGER NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT,
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+    UNIQUE(item_id, key)
+);

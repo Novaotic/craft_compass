@@ -6,9 +6,15 @@ from database.database import CraftCompassDB
 from controllers.item_controllers import ItemController
 from controllers.project_controller import ProjectController
 from controllers.report_controller import ReportController
+from controllers.tag_controller import TagController
+from controllers.export_controller import ExportController
 from ui.item_form import ItemForm
 from ui.project_form import ProjectForm
 from ui.report_view import ReportView
+from ui.search_filter_widget import SearchFilterWidget
+from ui.tag_manager import TagManager
+from ui.export_dialog import ExportDialog
+from ui.import_dialog import ImportDialog
 from utils.helpers import format_date_display, format_quantity
 
 
@@ -24,14 +30,46 @@ class MainWindow:
         self.item_controller = ItemController(db)
         self.project_controller = ProjectController(db)
         self.report_controller = ReportController(db)
+        self.tag_controller = TagController(db)
+        self.export_controller = ExportController(db)
+        
+        # Search/filter state
+        self.items_search_term = ""
+        self.items_filters = {}
+        self.projects_search_term = ""
+        self.projects_filters = {}
+        self.suppliers_search_term = ""
         
         # Create main window
         self.root = tk.Tk()
         self.root.title("Craft Compass")
         self.root.geometry("900x600")
         
+        self._create_menu()
         self._create_widgets()
         self._refresh_all()
+    
+    def _create_menu(self):
+        """Create the menu bar."""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Export...", command=self._export_data, accelerator="Ctrl+E")
+        file_menu.add_command(label="Import...", command=self._import_data, accelerator="Ctrl+I")
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.root.quit)
+        
+        # Tools menu
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="Manage Tags...", command=self._manage_tags)
+        
+        # Keyboard shortcuts
+        self.root.bind('<Control-e>', lambda e: self._export_data())
+        self.root.bind('<Control-i>', lambda e: self._import_data())
     
     def _create_widgets(self):
         """Create the main window widgets."""
@@ -68,6 +106,24 @@ class MainWindow:
         ttk.Button(toolbar, text="Edit Item", command=self._edit_item).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Delete Item", command=self._delete_item).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Refresh", command=self._refresh_items).pack(side=tk.LEFT, padx=2)
+        
+        # Search and filter
+        categories = list(set([item.category for item in self.item_controller.get_all_items() if item.category]))
+        suppliers = self.db.suppliers.get_all_suppliers()
+        supplier_names = [s['name'] for s in suppliers]
+        
+        filter_options = {
+            'Category': categories,
+            'Supplier': supplier_names
+        }
+        
+        self.items_search_filter = SearchFilterWidget(
+            self.items_frame,
+            on_search=self._on_items_search,
+            on_filter=self._on_items_filter,
+            filter_options=filter_options
+        )
+        self.items_search_filter.pack(fill=tk.X, padx=5, pady=5)
         
         # Items list
         list_frame = ttk.Frame(self.items_frame)
@@ -106,6 +162,14 @@ class MainWindow:
         ttk.Button(toolbar, text="Delete Project", command=self._delete_project).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Refresh", command=self._refresh_projects).pack(side=tk.LEFT, padx=2)
         
+        # Search and filter
+        self.projects_search_filter = SearchFilterWidget(
+            self.projects_frame,
+            on_search=self._on_projects_search,
+            on_filter=self._on_projects_filter
+        )
+        self.projects_search_filter.pack(fill=tk.X, padx=5, pady=5)
+        
         # Projects list
         list_frame = ttk.Frame(self.projects_frame)
         list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -139,6 +203,15 @@ class MainWindow:
         ttk.Button(toolbar, text="Delete Supplier", command=self._delete_supplier).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="Refresh", command=self._refresh_suppliers).pack(side=tk.LEFT, padx=2)
         
+        # Search
+        search_frame = ttk.Frame(self.suppliers_frame)
+        search_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(search_frame, text="Search:").pack(side=tk.LEFT, padx=5)
+        self.suppliers_search_var = tk.StringVar()
+        self.suppliers_search_var.trace('w', self._on_suppliers_search)
+        ttk.Entry(search_frame, textvariable=self.suppliers_search_var, width=40).pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        ttk.Button(search_frame, text="Clear", command=lambda: self.suppliers_search_var.set("")).pack(side=tk.LEFT, padx=5)
+        
         # Suppliers list
         list_frame = ttk.Frame(self.suppliers_frame)
         list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -167,14 +240,37 @@ class MainWindow:
         self.report_view = ReportView(self.reports_frame, self.report_controller)
         self.report_view.pack(fill=tk.BOTH, expand=True)
     
+    def _on_items_search(self, search_term: str):
+        """Handle items search."""
+        self.items_search_term = search_term
+        self._refresh_items()
+    
+    def _on_items_filter(self, filters: dict):
+        """Handle items filter."""
+        self.items_filters = filters
+        self._refresh_items()
+    
     def _refresh_items(self):
         """Refresh the items list."""
         # Clear existing items
         for item in self.items_tree.get_children():
             self.items_tree.delete(item)
         
-        # Load items
-        items = self.item_controller.get_all_items()
+        # Apply search and filter
+        if self.items_search_term:
+            items = self.item_controller.search_items(self.items_search_term)
+        elif self.items_filters:
+            category = self.items_filters.get('Category')
+            supplier_name = self.items_filters.get('Supplier')
+            supplier_id = None
+            if supplier_name:
+                suppliers = self.db.suppliers.get_all_suppliers()
+                supplier = next((s for s in suppliers if s['name'] == supplier_name), None)
+                supplier_id = supplier['id'] if supplier else None
+            items = self.item_controller.filter_items(category=category, supplier_id=supplier_id)
+        else:
+            items = self.item_controller.get_all_items()
+        
         suppliers = self.db.suppliers.get_all_suppliers()
         supplier_dict = {s['id']: s['name'] for s in suppliers}
         
@@ -189,14 +285,30 @@ class MainWindow:
                                          supplier_name,
                                          date_str))
     
+    def _on_projects_search(self, search_term: str):
+        """Handle projects search."""
+        self.projects_search_term = search_term
+        self._refresh_projects()
+    
+    def _on_projects_filter(self, filters: dict):
+        """Handle projects filter."""
+        self.projects_filters = filters
+        self._refresh_projects()
+    
     def _refresh_projects(self):
         """Refresh the projects list."""
         # Clear existing projects
         for item in self.projects_tree.get_children():
             self.projects_tree.delete(item)
         
-        # Load projects
-        projects = self.project_controller.get_all_projects()
+        # Apply search and filter
+        if self.projects_search_term:
+            projects = self.project_controller.search_projects(self.projects_search_term)
+        elif self.projects_filters:
+            # For now, just use search - can enhance filters later
+            projects = self.project_controller.get_all_projects()
+        else:
+            projects = self.project_controller.get_all_projects()
         
         for project in projects:
             date_str = format_date_display(project.date_created) if project.date_created else ""
@@ -207,14 +319,22 @@ class MainWindow:
                                             date_str,
                                             str(materials_count)))
     
+    def _on_suppliers_search(self, *args):
+        """Handle suppliers search."""
+        self.suppliers_search_term = self.suppliers_search_var.get().strip()
+        self._refresh_suppliers()
+    
     def _refresh_suppliers(self):
         """Refresh the suppliers list."""
         # Clear existing suppliers
         for item in self.suppliers_tree.get_children():
             self.suppliers_tree.delete(item)
         
-        # Load suppliers
-        suppliers = self.db.suppliers.get_all_suppliers()
+        # Apply search
+        if self.suppliers_search_term:
+            suppliers = self.db.suppliers.search_suppliers(self.suppliers_search_term)
+        else:
+            suppliers = self.db.suppliers.get_all_suppliers()
         
         for supplier in suppliers:
             self.suppliers_tree.insert("", tk.END, text=str(supplier['id']),
@@ -278,7 +398,11 @@ class MainWindow:
     def _save_item(self, item_data):
         """Save a new item."""
         try:
-            self.item_controller.create_item(**item_data)
+            tag_ids = item_data.pop('tag_ids', [])
+            item_id = self.item_controller.create_item(**item_data)
+            # Add tags
+            for tag_id in tag_ids:
+                self.tag_controller.add_tag_to_item(item_id, tag_id)
             messagebox.showinfo("Success", "Item created successfully")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to create item: {str(e)}")
@@ -291,7 +415,14 @@ class MainWindow:
         
         item_id = int(self.items_tree.item(selection[0])['text'])
         try:
+            tag_ids = item_data.pop('tag_ids', [])
             self.item_controller.update_item(item_id, **item_data)
+            # Update tags - remove all and re-add
+            existing_tags = self.tag_controller.get_item_tags(item_id)
+            for tag in existing_tags:
+                self.tag_controller.remove_tag_from_item(item_id, tag.id)
+            for tag_id in tag_ids:
+                self.tag_controller.add_tag_to_item(item_id, tag_id)
             messagebox.showinfo("Success", "Item updated successfully")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to update item: {str(e)}")
@@ -347,6 +478,7 @@ class MainWindow:
     def _save_project(self, project_data):
         """Save a new project."""
         try:
+            tag_ids = project_data.pop('tag_ids', [])
             project_id = self.project_controller.create_project(
                 name=project_data['name'],
                 description=project_data['description'],
@@ -355,6 +487,9 @@ class MainWindow:
             # Add materials
             for item_id, quantity in project_data['materials_used']:
                 self.project_controller.add_material_to_project(project_id, item_id, quantity)
+            # Add tags
+            for tag_id in tag_ids:
+                self.tag_controller.add_tag_to_project(project_id, tag_id)
             messagebox.showinfo("Success", "Project created successfully")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to create project: {str(e)}")
@@ -367,6 +502,7 @@ class MainWindow:
         
         project_id = int(self.projects_tree.item(selection[0])['text'])
         try:
+            tag_ids = project_data.pop('tag_ids', [])
             # Update project
             self.project_controller.update_project(
                 project_id=project_id,
@@ -381,6 +517,12 @@ class MainWindow:
             # Add new materials
             for item_id, quantity in project_data['materials_used']:
                 self.project_controller.add_material_to_project(project_id, item_id, quantity)
+            # Update tags - remove all and re-add
+            existing_tags = self.tag_controller.get_project_tags(project_id)
+            for tag in existing_tags:
+                self.tag_controller.remove_tag_from_project(project_id, tag.id)
+            for tag_id in tag_ids:
+                self.tag_controller.add_tag_to_project(project_id, tag_id)
             messagebox.showinfo("Success", "Project updated successfully")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to update project: {str(e)}")
@@ -470,6 +612,25 @@ class MainWindow:
             self._refresh_items()  # Refresh items in case supplier was referenced
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete supplier: {str(e)}")
+    
+    def _manage_tags(self):
+        """Open tag management dialog."""
+        tag_manager = TagManager(self.root, self.tag_controller, on_update=self._refresh_all)
+        self.root.wait_window(tag_manager.dialog)
+    
+    def _export_data(self):
+        """Open export dialog."""
+        export_dialog = ExportDialog(self.root, self.export_controller)
+        self.root.wait_window(export_dialog.dialog)
+        # Refresh after export in case data changed
+        self._refresh_all()
+    
+    def _import_data(self):
+        """Open import dialog."""
+        import_dialog = ImportDialog(self.root, self.export_controller)
+        self.root.wait_window(import_dialog.dialog)
+        # Refresh after import
+        self._refresh_all()
     
     def run(self):
         """Start the main event loop."""

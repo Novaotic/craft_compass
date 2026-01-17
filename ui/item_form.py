@@ -1,9 +1,12 @@
 """Form dialog for creating/editing items."""
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from typing import Optional, Callable
+from typing import Optional, Callable, List
 from utils.validators import validate_required, validate_date, validate_quantity, validate_integer
 from utils.helpers import get_today_date
+from utils.image_helpers import validate_image, copy_image_to_storage, get_image_path
+from controllers.tag_controller import TagController
+import os
 
 
 class ItemForm:
@@ -24,6 +27,9 @@ class ItemForm:
         self.on_save = on_save
         self.item_data = item_data
         self.result = None
+        self.tag_controller = TagController(db)
+        self.selected_tag_ids = []
+        self.item_id = item_data.get('id') if item_data else None
         
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
@@ -32,8 +38,8 @@ class ItemForm:
         self.dialog.grab_set()
         
         # Set minimum size and initial geometry
-        self.dialog.minsize(520, 420)
-        self.dialog.geometry("520x420")
+        self.dialog.minsize(550, 550)
+        self.dialog.geometry("550x550")
         
         self._create_widgets()
         if item_data:
@@ -95,18 +101,42 @@ class ItemForm:
         ttk.Entry(date_frame, textvariable=self.purchase_date_var, width=20).pack(side=tk.LEFT)
         ttk.Button(date_frame, text="Today", command=self._set_today_date).pack(side=tk.LEFT, padx=5)
         
-        # Photo path field
+        # Photo path field with preview
         ttk.Label(main_frame, text="Photo Path:").grid(row=5, column=0, sticky=tk.W, pady=5, padx=5)
         photo_frame = ttk.Frame(main_frame)
         photo_frame.grid(row=5, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
         self.photo_path_var = tk.StringVar()
+        self.photo_path_var.trace('w', self._update_image_preview)
         photo_entry = ttk.Entry(photo_frame, textvariable=self.photo_path_var, width=30)
         photo_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Button(photo_frame, text="Browse", command=self._browse_photo).pack(side=tk.LEFT, padx=5)
         
+        # Image preview
+        self.image_preview_label = ttk.Label(main_frame, text="No image")
+        self.image_preview_label.grid(row=6, column=0, columnspan=2, pady=5, padx=5)
+        
+        # Tags field
+        ttk.Label(main_frame, text="Tags:").grid(row=7, column=0, sticky=tk.W+tk.N, pady=5, padx=5)
+        tags_frame = ttk.Frame(main_frame)
+        tags_frame.grid(row=7, column=1, pady=5, padx=5, sticky=tk.W+tk.E)
+        
+        # Tags listbox with scrollbar
+        tags_list_frame = ttk.Frame(tags_frame)
+        tags_list_frame.pack(fill=tk.BOTH, expand=True)
+        
+        tags_scrollbar = ttk.Scrollbar(tags_list_frame)
+        tags_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.tags_listbox = tk.Listbox(tags_list_frame, height=4, selectmode=tk.MULTIPLE, yscrollcommand=tags_scrollbar.set)
+        self.tags_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tags_scrollbar.config(command=self.tags_listbox.yview)
+        
+        # Load tags into listbox
+        self._load_tags_list()
+        
         # Buttons
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=6, column=0, columnspan=2, pady=20)
+        button_frame.grid(row=8, column=0, columnspan=2, pady=20)
         ttk.Button(button_frame, text="Save", command=self._save_item).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=self._cancel).pack(side=tk.LEFT, padx=5)
     
@@ -118,10 +148,39 @@ class ItemForm:
         """Open file browser for photo selection."""
         filename = filedialog.askopenfilename(
             title="Select Photo",
-            filetypes=[("Image files", "*.jpg *.jpeg *.png *.gif *.bmp"), ("All files", "*.*")]
+            filetypes=[("Image files", "*.jpg *.jpeg *.png *.gif *.bmp *.webp"), ("All files", "*.*")]
         )
         if filename:
+            # Validate image
+            is_valid, error = validate_image(filename)
+            if not is_valid:
+                messagebox.showerror("Validation Error", error)
+                return
             self.photo_path_var.set(filename)
+    
+    def _update_image_preview(self, *args):
+        """Update image preview when path changes."""
+        photo_path = self.photo_path_var.get().strip()
+        if photo_path and os.path.isfile(photo_path):
+            try:
+                from PIL import Image, ImageTk
+                img = Image.open(photo_path)
+                img.thumbnail((150, 150), Image.Resampling.LANCZOS)
+                photo = ImageTk.PhotoImage(img)
+                self.image_preview_label.config(image=photo, text="")
+                self.image_preview_label.image = photo  # Keep a reference
+            except ImportError:
+                self.image_preview_label.config(text="Image: " + os.path.basename(photo_path))
+            except Exception:
+                self.image_preview_label.config(text="Invalid image")
+        else:
+            self.image_preview_label.config(text="No image", image="")
+    
+    def _load_tags_list(self):
+        """Load available tags into the listbox."""
+        tags = self.tag_controller.get_all_tags()
+        for tag in tags:
+            self.tags_listbox.insert(tk.END, f"{tag.name}")
     
     def _load_item_data(self):
         """Load item data into form fields."""
@@ -139,7 +198,26 @@ class ItemForm:
             self.supplier_var.set(supplier_str)
         
         self.purchase_date_var.set(self.item_data.get('purchase_date', ''))
-        self.photo_path_var.set(self.item_data.get('photo_path', ''))
+        photo_path = self.item_data.get('photo_path', '')
+        if photo_path:
+            # Try to resolve relative path
+            try:
+                abs_path = get_image_path(photo_path)
+                if os.path.isfile(abs_path):
+                    self.photo_path_var.set(abs_path)
+                else:
+                    self.photo_path_var.set(photo_path)
+            except:
+                self.photo_path_var.set(photo_path)
+        
+        # Load tags
+        if self.item_id:
+            item_tags = self.tag_controller.get_item_tags(self.item_id)
+            tag_names = [tag.name for tag in item_tags]
+            for i, tag_name in enumerate(self.tags_listbox.get(0, tk.END)):
+                if tag_name in tag_names:
+                    self.tags_listbox.selection_set(i)
+                    self.selected_tag_ids.append(self.tag_controller.get_all_tags()[i].id)
     
     def _save_item(self):
         """Validate and save the item."""
@@ -172,6 +250,22 @@ class ItemForm:
             except (ValueError, IndexError):
                 pass
         
+        # Handle image path - copy to storage if it's a new file
+        photo_path = self.photo_path_var.get().strip()
+        if photo_path and os.path.isfile(photo_path):
+            try:
+                # Copy to storage if not already in data/images
+                if not photo_path.startswith('data/images'):
+                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    photo_path = copy_image_to_storage(photo_path, project_root)
+            except Exception as e:
+                messagebox.showwarning("Warning", f"Could not copy image: {str(e)}\nUsing original path.")
+        
+        # Get selected tags
+        selected_indices = self.tags_listbox.curselection()
+        all_tags = self.tag_controller.get_all_tags()
+        selected_tag_ids = [all_tags[i].id for i in selected_indices]
+        
         # Collect form data
         item_data = {
             'name': self.name_var.get().strip(),
@@ -180,7 +274,8 @@ class ItemForm:
             'unit': self.unit_var.get().strip() or None,
             'supplier_id': supplier_id,
             'purchase_date': date_str or None,
-            'photo_path': self.photo_path_var.get().strip() or None
+            'photo_path': photo_path or None,
+            'tag_ids': selected_tag_ids
         }
         
         self.result = item_data

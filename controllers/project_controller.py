@@ -137,4 +137,53 @@ class ProjectController:
             List of material dictionaries
         """
         return self.db.materials.get_materials_by_project(project_id)
+    
+    def search_projects(self, search_term: str) -> List[Project]:
+        """
+        Search projects by name or description.
+        
+        Args:
+            search_term: Search term to match against
+        
+        Returns:
+            List of Project objects matching the search
+        """
+        projects_data = self.db.projects.search_projects(search_term)
+        projects = []
+        for proj_data in projects_data:
+            project = Project.from_dict(proj_data)
+            # Load materials for each project
+            materials = self.db.materials.get_materials_by_project(proj_data['id'])
+            for mat in materials:
+                project.add_material(mat['item_id'], mat['quantity_used'])
+            projects.append(project)
+        return projects
+    
+    def filter_projects(self, date_from: Optional[str] = None, date_to: Optional[str] = None,
+                       min_materials: Optional[int] = None) -> List[Project]:
+        """
+        Filter projects by date range or material count.
+        
+        Args:
+            date_from: Filter by creation date from (YYYY-MM-DD)
+            date_to: Filter by creation date to (YYYY-MM-DD)
+            min_materials: Minimum number of materials
+        
+        Returns:
+            List of Project objects matching the filters
+        """
+        projects_data = self.db.projects.filter_projects(
+            date_from=date_from,
+            date_to=date_to,
+            min_materials=min_materials
+        )
+        projects = []
+        for proj_data in projects_data:
+            project = Project.from_dict(proj_data)
+            # Load materials for each project
+            materials = self.db.materials.get_materials_by_project(proj_data['id'])
+            for mat in materials:
+                project.add_material(mat['item_id'], mat['quantity_used'])
+            projects.append(project)
+        return projects
 
