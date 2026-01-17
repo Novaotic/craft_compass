@@ -1,0 +1,5 @@
+# Craft Compass Requirements
+# SQLite is included with Python standard library, no external database dependencies needed
+
+# Optional: For environment variable management (if needed in future)
+python-dotenv>=0.19.2
