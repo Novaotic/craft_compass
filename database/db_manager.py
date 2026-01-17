@@ -21,29 +21,40 @@ class BaseManager:
 
     def execute_query(self, query: str, params: tuple = ()):
         """Execute a query that modifies data (INSERT, UPDATE, DELETE)."""
-        with self.get_connection() as conn:
+        conn = self.get_connection()
+        try:
             cursor = conn.cursor()
             cursor.execute(query, params)
             conn.commit()
             # Return lastrowid for INSERT operations
             return cursor.lastrowid
+        finally:
+            conn.close()
 
     def fetch_all(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
         """Fetch all rows from a query and return as list of dictionaries."""
-        with self.get_connection() as conn:
+        conn = self.get_connection()
+        try:
             cursor = conn.cursor()
             cursor.execute(query, params)
             rows = cursor.fetchall()
-            # Convert Row objects to dictionaries
-            return [dict(row) for row in rows]
+            # Convert Row objects to dictionaries before closing connection
+            result = [dict(row) for row in rows]
+            return result
+        finally:
+            conn.close()
 
     def fetch_one(self, query: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
         """Fetch one row from a query and return as dictionary."""
-        with self.get_connection() as conn:
+        conn = self.get_connection()
+        try:
             cursor = conn.cursor()
             cursor.execute(query, params)
             row = cursor.fetchone()
+            # Convert to dict before closing connection
             return dict(row) if row else None
+        finally:
+            conn.close()
 
 
 class DatabaseAdmin(BaseManager):
@@ -53,7 +64,8 @@ class DatabaseAdmin(BaseManager):
 
     def initialize_database(self):
         """Initialize the database with the schema."""
-        with self.get_connection() as conn:
+        conn = self.get_connection()
+        try:
             cursor = conn.cursor()
             with open(self.schema_path, 'r') as f:
                 schema_sql = f.read()
@@ -63,11 +75,14 @@ class DatabaseAdmin(BaseManager):
                     if statement:
                         cursor.execute(statement)
             conn.commit()
-        print(f"Database '{self.db_path}' initialized with schema from '{self.schema_path}'.")
+            print(f"Database '{self.db_path}' initialized with schema from '{self.schema_path}'.")
+        finally:
+            conn.close()
 
     def reset_database(self):
         """Drop all tables and reinitialize the database."""
-        with self.get_connection() as conn:
+        conn = self.get_connection()
+        try:
             cursor = conn.cursor()
             # Get all table names
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
@@ -75,6 +90,8 @@ class DatabaseAdmin(BaseManager):
             for table in tables:
                 cursor.execute(f"DROP TABLE IF EXISTS {table['name']};")
             conn.commit()
+        finally:
+            conn.close()
         
         self.initialize_database()
 
